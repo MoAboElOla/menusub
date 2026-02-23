@@ -1,0 +1,13 @@
+{
+    "name": "menu-submission-portal",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "install:all": "cd server && npm install && cd ../client && npm install",
+        "build": "cd client && npm run build",
+        "dev": "cd client && npm run dev",
+        "server": "cd server && node index.js",
+        "start": "npm run build && cd server && node index.js",
+        "deploy:build": "cd client && npm install && npm run build && cd ../server && npm install"
+    }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "menu-submission-server",
+  "version": "1.0.0",
+  "description": "Backend for Menu Submission Portal",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "better-sqlite3": "^11.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "sharp": "^0.33.2",
+    "uuid": "^11.0.5"
+  }
+}
