@@ -34,7 +34,7 @@ async function checkImageDimensions(filePath) {
 // ─── POST /api/submission/create ─────────────────────────────
 router.post('/create', (req, res) => {
     try {
-        const { brandName, phone } = req.body;
+        const { brandName, businessType } = req.body;
         if (!brandName || !brandName.trim()) {
             return res.status(400).json({ error: 'Brand name is required' });
         }
@@ -53,13 +53,13 @@ router.post('/create', (req, res) => {
         // Save meta.json
         fs.writeFileSync(
             path.join(subDir, 'meta.json'),
-            JSON.stringify({ brandName: brandName.trim(), phone: phone || '', createdAt }, null, 2)
+            JSON.stringify({ brandName: brandName.trim(), businessType: businessType || 'other', createdAt }, null, 2)
         );
 
         // Insert DB record
         db.prepare(
             'INSERT INTO submissions (id, brand_name, phone, access_token, created_at) VALUES (?, ?, ?, ?, ?)'
-        ).run(submissionId, brandName.trim(), phone || '', accessToken, createdAt);
+        ).run(submissionId, brandName.trim(), businessType || 'other', accessToken, createdAt);
 
         res.json({ submissionId, accessToken });
     } catch (err) {
@@ -191,12 +191,13 @@ router.get('/info', authMiddleware, (req, res) => {
 
         res.json({
             brandName: meta.brandName,
-            phone: meta.phone,
+            businessType: meta.businessType || 'other',
             createdAt: meta.createdAt,
             logoUploaded: logoFiles.length > 0,
             logoFilename: logoFiles[0] || null,
             imageCount: imageFiles.length,
             menuItems: meta.menuItems || [],
+            locationDetails: meta.locationDetails || null,
             status: req.submission.status,
         });
     } catch (err) {
@@ -232,6 +233,63 @@ router.post('/save-menu', authMiddleware, (req, res) => {
     }
 });
 
+// ─── POST /api/submission/save-location ──────────────────────
+router.post('/save-location', authMiddleware, (req, res) => {
+    try {
+        const { schedule, pickupLocation, operationalPhone } = req.body;
+        const subDir = getSubmissionDir(req.submissionId);
+        const metaPath = path.join(subDir, 'meta.json');
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+
+        meta.locationDetails = { schedule, pickupLocation, operationalPhone };
+        fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Save location error:', err);
+        res.status(500).json({ error: 'Failed to save location details' });
+    }
+});
+
+// ─── Helper: sanitize filename for filesystem safety ─────────
+function sanitizeFilename(name) {
+    return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim();
+}
+
+// ─── Helper: build image rename map ──────────────────────────
+function buildImageRenameMap(items) {
+    const map = {}; // { originalFilename: renamedFilename }
+    const usedNames = new Set();
+
+    items.forEach((item) => {
+        if (!item.image) return;
+        // Determine the display name: prefer EN, fallback AR, fallback original
+        const displayName = (item.item_name_en || item.item_name_ar || '').trim();
+        if (!displayName) { map[item.image] = item.image; return; }
+
+        const ext = path.extname(item.image);
+        let safeName = sanitizeFilename(displayName);
+
+        // Ensure uniqueness
+        let finalName = `${safeName}${ext}`;
+        let counter = 2;
+        while (usedNames.has(finalName.toLowerCase())) {
+            finalName = `${safeName} (${counter})${ext}`;
+            counter++;
+        }
+        usedNames.add(finalName.toLowerCase());
+        map[item.image] = finalName;
+    });
+
+    return map;
+}
+
+// ─── Style an Excel header row ───────────────────────────────
+function styleHeaderRow(sheet) {
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+}
+
 // ─── POST /api/submission/submit ─────────────────────────────
 router.post('/submit', authMiddleware, async (req, res) => {
     try {
@@ -239,33 +297,43 @@ router.post('/submit', authMiddleware, async (req, res) => {
         const metaPath = path.join(subDir, 'meta.json');
         const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
         const items = meta.menuItems || [];
+        const safeBrandName = sanitizeFilename(meta.brandName || 'brand').replace(/\s+/g, '_');
+
+        // Build image rename map
+        const renameMap = buildImageRenameMap(items);
 
         // ── Generate Excel ──
         const workbook = new ExcelJS.Workbook();
-        const sheet = workbook.addWorksheet('Menu');
+        const menuSheet = workbook.addWorksheet('Menu');
 
-        sheet.columns = [
+        // Calculate max add-ons across all items
+        const maxAddons = items.reduce((max, item) => Math.max(max, (item.addons || []).length), 0);
+
+        // Define columns
+        const columns = [
             { header: 'Item Name (EN)', key: 'item_name_en', width: 25 },
             { header: 'Item Name (AR)', key: 'item_name_ar', width: 25 },
             { header: 'Description (EN)', key: 'description_en', width: 35 },
             { header: 'Description (AR)', key: 'description_ar', width: 35 },
-            { header: 'Price', key: 'price', width: 12 },
+            { header: 'Price (QAR)', key: 'price', width: 12 },
             { header: 'Category', key: 'category', width: 18 },
             { header: 'Barcode', key: 'barcode', width: 18 },
             { header: 'Image Filename', key: 'image_filename', width: 30 },
         ];
 
-        // Style header row
-        sheet.getRow(1).font = { bold: true };
-        sheet.getRow(1).fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FF4472C4' },
-        };
-        sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        // Add dynamic add-on columns
+        for (let i = 1; i <= maxAddons; i++) {
+            columns.push(
+                { header: `Option ${i} (EN)`, key: `opt${i}_en`, width: 20 },
+                { header: `Option ${i} (AR)`, key: `opt${i}_ar`, width: 20 },
+                { header: `Option ${i} Price`, key: `opt${i}_price`, width: 15 }
+            );
+        }
+        menuSheet.columns = columns;
+        styleHeaderRow(menuSheet);
 
         items.forEach((item) => {
-            sheet.addRow({
+            const rowData = {
                 item_name_en: item.item_name_en || '',
                 item_name_ar: item.item_name_ar || '',
                 description_en: item.description_en || '',
@@ -273,17 +341,69 @@ router.post('/submit', authMiddleware, async (req, res) => {
                 price: item.price || '',
                 category: item.category || '',
                 barcode: item.barcode || '',
-                image_filename: item.image || '',
-            });
+                image_filename: renameMap[item.image] || item.image || '',
+            };
+
+            // Flatten add-ons into the row
+            if (item.addons && item.addons.length > 0) {
+                item.addons.forEach((addon, idx) => {
+                    const i = idx + 1;
+                    rowData[`opt${i}_en`] = addon.name_en || '';
+                    rowData[`opt${i}_ar`] = addon.name_ar || '';
+                    rowData[`opt${i}_price`] = addon.price || '';
+                });
+            }
+
+            menuSheet.addRow(rowData);
         });
 
-        const excelPath = path.join(subDir, 'menu', 'menu.xlsx');
+        // Use brand name in Excel filename
+        const excelBasename = `menu_${safeBrandName}.xlsx`;
+        const excelPath = path.join(subDir, 'menu', excelBasename);
+
+        // Ensure menu directory exists (it should, but just in case)
+        if (!fs.existsSync(path.join(subDir, 'menu'))) {
+            fs.mkdirSync(path.join(subDir, 'menu'), { recursive: true });
+        }
+
+        // Sheet 2: Location & Working Hours
+        const locationSheet = workbook.addWorksheet('Location_WorkingHours');
+        locationSheet.columns = [
+            { header: 'Field', key: 'field', width: 30 },
+            { header: 'Value', key: 'value', width: 60 }
+        ];
+        styleHeaderRow(locationSheet);
+
+        if (meta.locationDetails) {
+            const { schedule, pickupLocation, operationalPhone } = meta.locationDetails;
+
+            // Add schedule
+            const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            DAYS.forEach(day => {
+                const dayKey = day.toLowerCase();
+                const dayData = schedule[dayKey];
+                let val = 'Closed';
+                if (dayData && !dayData.closed) {
+                    val = `${dayData.from.h}:${dayData.from.m} ${dayData.from.p} - ${dayData.to.h}:${dayData.to.m} ${dayData.to.p}`;
+                }
+                locationSheet.addRow({ field: `Working Hours (${day})`, value: val });
+            });
+
+            // Add map link
+            locationSheet.addRow({ field: 'Pickup Location (Google Maps)', value: pickupLocation || 'None provided' });
+
+            // Add operational phone
+            locationSheet.addRow({ field: 'Operational Phone Number', value: operationalPhone || 'None provided' });
+        } else {
+            locationSheet.addRow({ field: 'Notice', value: 'No location details provided.' });
+        }
+
         await workbook.xlsx.writeFile(excelPath);
 
         // ── Generate ZIP ──
-        const safeBrandName = meta.brandName.replace(/[^a-zA-Z0-9_\-\u0600-\u06FF ]/g, '_');
         const zipFilename = `${safeBrandName}-${req.submissionId.slice(0, 8)}.zip`;
         const zipPath = path.join(subDir, 'package', zipFilename);
+        const productImagesFolderName = `product_images_${safeBrandName}`;
 
         await new Promise((resolve, reject) => {
             const output = fs.createWriteStream(zipPath);
@@ -300,17 +420,29 @@ router.post('/submit', authMiddleware, async (req, res) => {
                 logoFiles.forEach((f) => archive.file(path.join(logoDir, f), { name: `logo/${f}` }));
             }
 
-            // Add product images
+            // Add product images — renamed + using brand-named folder
             const imgDir = path.join(subDir, 'product_images');
             if (fs.existsSync(imgDir)) {
-                const imgFiles = fs.readdirSync(imgDir).filter((f) => !f.startsWith('.'));
-                imgFiles.forEach((f) =>
-                    archive.file(path.join(imgDir, f), { name: `product_images/${f}` })
-                );
+                const addedFiles = new Set();
+                // First: add images that are assigned to items, with renamed filenames
+                Object.entries(renameMap).forEach(([originalName, renamedName]) => {
+                    const filePath = path.join(imgDir, originalName);
+                    if (fs.existsSync(filePath)) {
+                        archive.file(filePath, { name: `${productImagesFolderName}/${renamedName}` });
+                        addedFiles.add(originalName);
+                    }
+                });
+                // Then: add any unassigned images with their original names
+                const allImages = fs.readdirSync(imgDir).filter((f) => !f.startsWith('.'));
+                allImages.forEach((f) => {
+                    if (!addedFiles.has(f)) {
+                        archive.file(path.join(imgDir, f), { name: `${productImagesFolderName}/${f}` });
+                    }
+                });
             }
 
-            // Add Excel
-            archive.file(excelPath, { name: 'menu/menu.xlsx' });
+            // Add Excel (renamed)
+            archive.file(excelPath, { name: `menu/${excelBasename}` });
 
             // Add meta.json
             archive.file(metaPath, { name: 'meta.json' });
@@ -325,10 +457,9 @@ router.post('/submit', authMiddleware, async (req, res) => {
             req.submissionId
         );
 
-        const accessToken = req.submission.access_token;
         res.json({
-            zipDownloadUrl: `/download/${req.submissionId}/package.zip?accessToken=${accessToken}`,
-            excelDownloadUrl: `/download/${req.submissionId}/menu.xlsx?accessToken=${accessToken}`,
+            zipDownloadUrl: `/download/${req.submissionId}/package.zip?accessToken=${req.submission.access_token}`,
+            excelDownloadUrl: `/download/${req.submissionId}/menu.xlsx?accessToken=${req.submission.access_token}`,
         });
     } catch (err) {
         console.error('Submit error:', err);

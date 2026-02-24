@@ -1,8 +1,12 @@
+import { useLanguage } from '../i18n';
+
 export default function StepIndicator({ currentStep }) {
+    const { t } = useLanguage();
     const steps = [
-        { num: 1, label: 'Assets' },
-        { num: 2, label: 'Menu' },
-        { num: 3, label: 'Review' },
+        { num: 1, label: t('stepAssets') },
+        { num: 2, label: t('stepMenu') },
+        { num: 3, label: t('stepLocation') },
+        { num: 4, label: t('stepReview') },
     ];
 
     return (
@@ -12,10 +16,10 @@ export default function StepIndicator({ currentStep }) {
                     <div className="flex flex-col items-center">
                         <div
                             className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 ${currentStep === step.num
-                                    ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30 scale-110'
-                                    : currentStep > step.num
-                                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                                        : 'bg-[#1e1f2e] text-gray-500 border border-gray-700'
+                                ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30 scale-110'
+                                : currentStep > step.num
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                                    : 'bg-[#1e1f2e] text-gray-500 border border-gray-700'
                                 }`}
                         >
                             {currentStep > step.num ? (
@@ -28,10 +32,10 @@ export default function StepIndicator({ currentStep }) {
                         </div>
                         <span
                             className={`text-xs mt-1.5 font-medium ${currentStep === step.num
-                                    ? 'text-brand-400'
-                                    : currentStep > step.num
-                                        ? 'text-emerald-400'
-                                        : 'text-gray-600'
+                                ? 'text-brand-400'
+                                : currentStep > step.num
+                                    ? 'text-emerald-400'
+                                    : 'text-gray-600'
                                 }`}
                         >
                             {step.label}
