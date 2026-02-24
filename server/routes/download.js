@@ -27,10 +27,13 @@ function downloadAuth(req, res, next) {
     next();
 }
 
+const { sendZipDownloadEmail } = require('../utils/sendZipDownloadEmail');
+
 // GET /download/:submissionId/package.zip
-router.get('/:submissionId/package.zip', downloadAuth, (req, res) => {
+router.get('/:submissionId/package.zip', downloadAuth, async (req, res) => {
     try {
-        const subDir = path.join(DATA_DIR, req.params.submissionId);
+        const subId = req.params.submissionId;
+        const subDir = path.join(DATA_DIR, subId);
         const pkgDir = path.join(subDir, 'package');
 
         if (!fs.existsSync(pkgDir)) {
@@ -40,6 +43,23 @@ router.get('/:submissionId/package.zip', downloadAuth, (req, res) => {
         const files = fs.readdirSync(pkgDir).filter((f) => f.endsWith('.zip'));
         if (files.length === 0) {
             return res.status(404).json({ error: 'ZIP file not found' });
+        }
+
+        // Email notification logic (One-time only)
+        const metaPath = path.join(subDir, 'meta.json');
+        if (fs.existsSync(metaPath)) {
+            const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+            if (!meta.zipDownloadedAt) {
+                meta.zipDownloadedAt = new Date().toISOString();
+                fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+
+                // Non-blocking email trigger
+                const itemCount = meta.menuItems ? meta.menuItems.length : 0;
+                sendZipDownloadEmail(meta.brandName, itemCount).catch(err => {
+                    console.error('ZIP download email failed (async):', err);
+                });
+                console.log(`ZIP downloaded for first time: email triggered for ${meta.brandName} (${subId})`);
+            }
         }
 
         const zipPath = path.join(pkgDir, files[0]);

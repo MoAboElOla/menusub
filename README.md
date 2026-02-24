@@ -20,6 +20,8 @@ PORT=3001
 SESSION_SECRET=your-secret-key
 ADMIN_TOKEN=your-admin-password
 RETENTION_HOURS=72
+RESEND_API_KEY=your-resend-api-key
+NOTIFY_EMAIL_TO=your-email@example.com
 ```
 
 ### 3. Run the app
@@ -45,9 +47,9 @@ Open **http://localhost:5173** in your browser.
 ### User Flow
 1. **Landing** — Enter brand name and phone number
 2. **Assets** — Upload logo and product images (warns if below 1000×1000)
-3. **Menu** — Add menu items with names (EN/AR), descriptions, price, category, barcode, and link to uploaded images
+3. **Menu** — Add menu items with names (EN/AR), descriptions, price, category, barcode, and link to uploaded images (auto-saves as you type)
 4. **Review** — Verify submission summary
-5. **Submit** — Generates a ZIP package and Excel file for download
+5. **Submit** — Generates a ZIP package and Excel file for download (email notification sent on first ZIP download)
 
 ### Downloads
 - **ZIP Package** contains: `logo/`, `product_images/`, `menu/menu.xlsx`, `meta.json`

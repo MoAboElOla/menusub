@@ -176,6 +176,29 @@ router.get('/images', authMiddleware, (req, res) => {
     }
 });
 
+// ─── DELETE /api/submission/delete-image ─────────────────────
+router.delete('/delete-image', authMiddleware, (req, res) => {
+    try {
+        const { filename } = req.body;
+        if (!filename) return res.status(400).json({ error: 'filename is required' });
+        const filePath = path.join(getSubmissionDir(req.submissionId), 'product_images', filename);
+        // Safety: make sure the resolved path is inside the submission dir
+        const submissionDir = getSubmissionDir(req.submissionId);
+        if (!path.resolve(filePath).startsWith(path.resolve(submissionDir))) {
+            return res.status(400).json({ error: 'Invalid filename' });
+        }
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            res.json({ deleted: true, filename });
+        } else {
+            res.status(404).json({ error: 'File not found' });
+        }
+    } catch (err) {
+        console.error('Delete image error:', err);
+        res.status(500).json({ error: 'Failed to delete image' });
+    }
+});
+
 // ─── GET /api/submission/info ────────────────────────────────
 router.get('/info', authMiddleware, (req, res) => {
     try {

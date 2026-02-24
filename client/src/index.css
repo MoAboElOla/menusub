@@ -10,14 +10,58 @@
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #0f1117;
-  color: #e4e5e7;
+  background: #f8f9fb;
+  color: #1a1b23;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #1a1b23; }
-::-webkit-scrollbar-thumb { background: #3b3d4a; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #5c7cfa; }
+.dark body,
+html.dark body {
+  background: #0f1117;
+  color: #e4e5e7;
+}
+
+/* Custom scrollbar — light */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #e8e8ec;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c3ca;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #5c7cfa;
+}
+
+/* Custom scrollbar — dark */
+.dark ::-webkit-scrollbar-track {
+  background: #1a1b23;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #3b3d4a;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #5c7cfa;
+}
+
+/* Fix select option visibility in all browsers */
+select option {
+  background: #ffffff;
+  color: #1a1b23;
+}
+
+.dark select option {
+  background: #181924;
+  color: #e4e5e7;
+}

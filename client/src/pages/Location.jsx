@@ -93,19 +93,22 @@ export default function Location() {
         );
     }
 
+    const selectClasses = "bg-white dark:bg-[#0f1117] text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md px-1.5 py-0.5 outline-none focus:border-brand-500 transition-colors text-sm appearance-auto cursor-pointer";
+    const periodClasses = "bg-white dark:bg-[#0f1117] text-brand-600 dark:text-brand-400 font-bold border border-gray-300 dark:border-gray-600 rounded-md px-1.5 py-0.5 ml-1 outline-none focus:border-brand-500 transition-colors text-sm appearance-auto cursor-pointer";
+
     return (
         <div className="max-w-4xl mx-auto px-4 py-8">
             <StepIndicator currentStep={3} />
 
-            <div className="bg-[#181924] border border-gray-700/50 rounded-2xl p-6 sm:p-8 shadow-xl mb-6">
+            <div className="bg-white dark:bg-[#181924] border border-gray-200 dark:border-gray-700/50 rounded-2xl p-6 sm:p-8 shadow-sm dark:shadow-xl mb-6">
                 <div className="mb-8">
-                    <h1 className="text-2xl font-bold text-white mb-2">{t('locationTitle')}</h1>
-                    <p className="text-gray-400">{t('locationSubtitle')}</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('locationTitle')}</h1>
+                    <p className="text-gray-500 dark:text-gray-400">{t('locationSubtitle')}</p>
                 </div>
 
                 {/* Working Hours */}
                 <div className="space-y-6 mb-10">
-                    <h2 className="text-lg font-semibold text-brand-400 border-b border-gray-700/50 pb-2">
+                    <h2 className="text-lg font-semibold text-brand-600 dark:text-brand-400 border-b border-gray-200 dark:border-gray-700/50 pb-2">
                         {t('workingHours')}
                     </h2>
 
@@ -116,11 +119,11 @@ export default function Location() {
                             const tDay = t('day' + dayLabel);
 
                             return (
-                                <div key={dayKey} className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl transition-all ${dayData.closed ? 'bg-red-500/5 border border-red-500/10' : 'bg-[#1e1f2e] border border-gray-800'}`}>
+                                <div key={dayKey} className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl transition-all ${dayData.closed ? 'bg-red-50 dark:bg-red-500/5 border border-red-200 dark:border-red-500/10' : 'bg-gray-50 dark:bg-[#1e1f2e] border border-gray-200 dark:border-gray-800'}`}>
                                     <div className="flex items-center gap-4 mb-4 sm:mb-0">
-                                        <div className="w-24 font-medium text-white">{tDay}</div>
+                                        <div className="w-24 font-medium text-gray-900 dark:text-white">{tDay}</div>
                                         <label className="flex items-center gap-2 cursor-pointer group">
-                                            <div className={`w-10 h-5 rounded-full relative transition-colors ${dayData.closed ? 'bg-red-500' : 'bg-gray-700'}`}>
+                                            <div className={`w-10 h-5 rounded-full relative transition-colors ${dayData.closed ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-700'}`}>
                                                 <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${dayData.closed ? 'right-1' : 'left-1'}`} />
                                             </div>
                                             <input
@@ -129,7 +132,7 @@ export default function Location() {
                                                 checked={dayData.closed}
                                                 onChange={() => handleToggleClosed(dayKey)}
                                             />
-                                            <span className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">
+                                            <span className="text-xs text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors">
                                                 {t('closedAllDay')}
                                             </span>
                                         </label>
@@ -137,32 +140,32 @@ export default function Location() {
 
                                     {!dayData.closed && (
                                         <div className="flex items-center gap-2 text-sm">
-                                            <div className="flex items-center gap-1 bg-black/20 p-1 rounded-lg border border-gray-700/30">
+                                            <div className="flex items-center gap-1 bg-gray-100 dark:bg-black/20 p-1.5 rounded-lg border border-gray-200 dark:border-gray-700/30">
                                                 <span className="text-[10px] text-gray-500 uppercase px-1">{t('from')}</span>
-                                                <select value={dayData.from.h} onChange={(e) => handleTimeChange(dayKey, 'from', 'h', e.target.value)} className="bg-transparent text-white outline-none">
+                                                <select value={dayData.from.h} onChange={(e) => handleTimeChange(dayKey, 'from', 'h', e.target.value)} className={selectClasses}>
                                                     {HOURS.map(h => <option key={h} value={h < 10 ? '0' + h : h}>{h < 10 ? '0' + h : h}</option>)}
                                                 </select>
-                                                <span className="text-gray-600">:</span>
-                                                <select value={dayData.from.m} onChange={(e) => handleTimeChange(dayKey, 'from', 'm', e.target.value)} className="bg-transparent text-white outline-none">
+                                                <span className="text-gray-400 dark:text-gray-600">:</span>
+                                                <select value={dayData.from.m} onChange={(e) => handleTimeChange(dayKey, 'from', 'm', e.target.value)} className={selectClasses}>
                                                     {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
                                                 </select>
-                                                <select value={dayData.from.p} onChange={(e) => handleTimeChange(dayKey, 'from', 'p', e.target.value)} className="bg-transparent text-brand-400 font-bold ml-1 outline-none">
+                                                <select value={dayData.from.p} onChange={(e) => handleTimeChange(dayKey, 'from', 'p', e.target.value)} className={periodClasses}>
                                                     {PERIODS.map(p => <option key={p} value={p}>{t(p.toLowerCase())}</option>)}
                                                 </select>
                                             </div>
 
-                                            <div className="w-4 h-px bg-gray-700 mx-1" />
+                                            <div className="w-4 h-px bg-gray-300 dark:bg-gray-700 mx-1" />
 
-                                            <div className="flex items-center gap-1 bg-black/20 p-1 rounded-lg border border-gray-700/30">
+                                            <div className="flex items-center gap-1 bg-gray-100 dark:bg-black/20 p-1.5 rounded-lg border border-gray-200 dark:border-gray-700/30">
                                                 <span className="text-[10px] text-gray-500 uppercase px-1">{t('to')}</span>
-                                                <select value={dayData.to.h} onChange={(e) => handleTimeChange(dayKey, 'to', 'h', e.target.value)} className="bg-transparent text-white outline-none">
+                                                <select value={dayData.to.h} onChange={(e) => handleTimeChange(dayKey, 'to', 'h', e.target.value)} className={selectClasses}>
                                                     {HOURS.map(h => <option key={h} value={h < 10 ? '0' + h : h}>{h < 10 ? '0' + h : h}</option>)}
                                                 </select>
-                                                <span className="text-gray-600">:</span>
-                                                <select value={dayData.to.m} onChange={(e) => handleTimeChange(dayKey, 'to', 'm', e.target.value)} className="bg-transparent text-white outline-none">
+                                                <span className="text-gray-400 dark:text-gray-600">:</span>
+                                                <select value={dayData.to.m} onChange={(e) => handleTimeChange(dayKey, 'to', 'm', e.target.value)} className={selectClasses}>
                                                     {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
                                                 </select>
-                                                <select value={dayData.to.p} onChange={(e) => handleTimeChange(dayKey, 'to', 'p', e.target.value)} className="bg-transparent text-brand-400 font-bold ml-1 outline-none">
+                                                <select value={dayData.to.p} onChange={(e) => handleTimeChange(dayKey, 'to', 'p', e.target.value)} className={periodClasses}>
                                                     {PERIODS.map(p => <option key={p} value={p}>{t(p.toLowerCase())}</option>)}
                                                 </select>
                                             </div>
@@ -176,7 +179,7 @@ export default function Location() {
 
                 {/* Pickup Location */}
                 <div className="space-y-6 mb-10">
-                    <h2 className="text-lg font-semibold text-brand-400 border-b border-gray-700/50 pb-2">
+                    <h2 className="text-lg font-semibold text-brand-600 dark:text-brand-400 border-b border-gray-200 dark:border-gray-700/50 pb-2">
                         {t('pickupLocation')}
                     </h2>
                     <input
@@ -184,16 +187,16 @@ export default function Location() {
                         value={pickupLocation}
                         onChange={(e) => setPickupLocation(e.target.value)}
                         placeholder={t('pickupLocationPlaceholder')}
-                        className="w-full bg-[#1e1f2e] border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-all"
+                        className="w-full bg-gray-50 dark:bg-[#1e1f2e] border border-gray-300 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-all"
                     />
                 </div>
 
                 {/* Operational Phone */}
                 <div className="space-y-4">
-                    <h2 className="text-lg font-semibold text-brand-400 border-b border-gray-700/50 pb-2">
+                    <h2 className="text-lg font-semibold text-brand-600 dark:text-brand-400 border-b border-gray-200 dark:border-gray-700/50 pb-2">
                         {t('operationalPhone')}
                     </h2>
-                    <p className="text-sm text-gray-400 leading-relaxed italic">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed italic">
                         {t('operationalPhoneHint')}
                     </p>
                     <input
@@ -201,7 +204,7 @@ export default function Location() {
                         value={operationalPhone}
                         onChange={(e) => setOperationalPhone(e.target.value)}
                         placeholder={t('operationalPhonePlaceholder')}
-                        className="w-full bg-[#1e1f2e] border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-all"
+                        className="w-full bg-gray-50 dark:bg-[#1e1f2e] border border-gray-300 dark:border-gray-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-all"
                     />
                 </div>
             </div>
@@ -209,7 +212,7 @@ export default function Location() {
             <div className="flex justify-between items-center gap-4">
                 <button
                     onClick={() => navigate('/submit/menu')}
-                    className="px-6 py-3 bg-[#181924] text-gray-400 rounded-xl hover:bg-[#252836] hover:text-white transition-all font-medium border border-gray-700/50"
+                    className="px-6 py-3 bg-white dark:bg-[#181924] text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-100 dark:hover:bg-[#252836] hover:text-gray-900 dark:hover:text-white transition-all font-medium border border-gray-200 dark:border-gray-700/50"
                 >
                     {t('backMenu')}
                 </button>
