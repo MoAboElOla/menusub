@@ -56,10 +56,14 @@ router.get('/:submissionId/package.zip', downloadAuth, async (req, res) => {
                 // Non-blocking email trigger
                 const itemCount = meta.menuItems ? meta.menuItems.length : 0;
                 sendZipDownloadEmail(meta.brandName, itemCount).catch(err => {
-                    console.error('ZIP download email failed (async):', err);
+                    console.error('[Download] ZIP download email failed (async):', err);
                 });
-                console.log(`ZIP downloaded for first time: email triggered for ${meta.brandName} (${subId})`);
+                console.log(`[Download] First time download detected for ${meta.brandName}. Triggering email.`);
+            } else {
+                console.log(`[Download] ZIP already downloaded at ${meta.zipDownloadedAt}. Skipping email.`);
             }
+        } else {
+            console.warn(`[Download] meta.json missing at ${metaPath}. Skipping email.`);
         }
 
         const zipPath = path.join(pkgDir, files[0]);

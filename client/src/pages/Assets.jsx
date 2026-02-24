@@ -78,7 +78,8 @@ export default function Assets() {
             await apiDelete('/api/submission/delete-image', { filename: img.filename });
             setImages(prev => prev.filter((_, i) => i !== idx));
         } catch (err) {
-            setError(t('uploadFailed') + ': ' + err.message);
+            console.error('Delete failed:', err);
+            setError(t('deleteFailed') || 'Delete failed: ' + err.message);
         }
     };
 

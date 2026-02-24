@@ -8,16 +8,21 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
  * @param {number} itemCount 
  */
 async function sendZipDownloadEmail(brandName, itemCount) {
+    console.log(`[Email] Attempting to send ZIP download email for ${brandName}...`);
+
     if (!resend) {
-        console.log('Resend API key missing, skipping email notification.');
+        const partialKey = process.env.RESEND_API_KEY ? `${process.env.RESEND_API_KEY.substring(0, 7)}...` : 'NONE';
+        console.warn(`[Email] FAILED: Resend API key missing or not initialized. Loaded key: ${partialKey}`);
         return;
     }
 
     const to = process.env.NOTIFY_EMAIL_TO;
     if (!to) {
-        console.warn('NOTIFY_EMAIL_TO missing, skipping email notification.');
+        console.warn('[Email] FAILED: NOTIFY_EMAIL_TO missing in .env.');
         return;
     }
+
+    console.log(`[Email] Sending to: ${to}`);
 
     try {
         const timestamp = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Qatar' });
@@ -29,12 +34,12 @@ async function sendZipDownloadEmail(brandName, itemCount) {
         });
 
         if (error) {
-            console.error('ZIP downloaded email failed:', error);
+            console.error('[Email] Resend API Error:', JSON.stringify(error, null, 2));
         } else {
-            console.log(`ZIP downloaded email sent for ${brandName}`);
+            console.log(`[Email] SUCCESS: Email sent for ${brandName}. Resend ID: ${data.id}`);
         }
     } catch (err) {
-        console.error('ZIP downloaded email failed with exception:', err);
+        console.error('[Email] Unexpected exception during send:', err);
     }
 }
 
