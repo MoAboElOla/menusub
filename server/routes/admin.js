@@ -3,10 +3,14 @@ const router = express.Router();
 const db = require('../db');
 const { runCleanup } = require('../cleanup');
 
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'admin-secret';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 
 // Admin auth middleware
 function adminAuth(req, res, next) {
+    if (!ADMIN_TOKEN) {
+        return res.status(503).json({ error: 'Admin routes are disabled: ADMIN_TOKEN is not configured' });
+    }
+
     const token =
         req.headers['x-admin-token'] ||
         req.query.adminToken ||

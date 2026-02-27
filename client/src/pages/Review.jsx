@@ -49,7 +49,7 @@ export default function Review() {
                         <h3 className="text-sm font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">{t('brandInfo')}</h3>
                         <div className="space-y-3">
                             <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('brandName')}</span><span className="text-gray-900 dark:text-white font-medium">{info.brandName}</span></div>
-                            {info.businessType && <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('businessType')}</span><span className="text-gray-900 dark:text-white">{t('bt_' + info.businessType)}</span></div>}
+                            {info.businessType && <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">{t('businessType')}</span><span className="text-gray-900 dark:text-white font-medium">{t(info.businessType)}</span></div>}
                         </div>
                     </div>
 
@@ -81,8 +81,8 @@ export default function Review() {
                                         return (
                                             <div key={day} className="flex justify-between text-sm">
                                                 <span className="text-gray-500 dark:text-gray-400">{t('day' + day.charAt(0).toUpperCase() + day.slice(1))}</span>
-                                                <span className={d.closed ? 'text-red-500 dark:text-red-400/70' : 'text-gray-700 dark:text-gray-300'}>
-                                                    {d.closed ? t('closedAllDay') : `${d.from.h}:${d.from.m} ${t(d.from.p.toLowerCase())} - ${d.to.h}:${d.to.m} ${t(d.to.p.toLowerCase())}`}
+                                                <span className={d.closed ? 'text-red-500 dark:text-red-400/70' : (d.is24Hours ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-gray-700 dark:text-gray-300')}>
+                                                    {d.closed ? t('closedAllDay') : (d.is24Hours ? t('open24Hours') : `${d.from.h}:${d.from.m} ${t(d.from.p.toLowerCase())} - ${d.to.h}:${d.to.m} ${t(d.to.p.toLowerCase())}`)}
                                                 </span>
                                             </div>
                                         );

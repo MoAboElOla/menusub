@@ -6,8 +6,10 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
  * Sends an email notification when a ZIP package is downloaded.
  * @param {string} brandName 
  * @param {number} itemCount 
+ * @param {string} submissionId 
+ * @param {string} accessToken 
  */
-async function sendZipDownloadEmail(brandName, itemCount) {
+async function sendZipDownloadEmail(brandName, itemCount, submissionId, accessToken) {
     console.log(`[Email] Attempting to send ZIP download email for ${brandName}...`);
 
     if (!resend) {
@@ -22,15 +24,30 @@ async function sendZipDownloadEmail(brandName, itemCount) {
         return;
     }
 
+    const appBaseUrl = process.env.APP_BASE_URL || 'http://localhost:3001';
+    const downloadLink = `${appBaseUrl}/download/${submissionId}/package.zip?accessToken=${accessToken}`;
+
     console.log(`[Email] Sending to: ${to}`);
 
     try {
         const timestamp = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Qatar' });
+
+        const textBody = `Menu ZIP Downloaded!
+
+Brand Name: ${brandName}
+Menu Items: ${itemCount}
+Downloaded At: ${timestamp} (Qatar Time)
+
+Download Menu ZIP Secure Link:
+${downloadLink}
+
+Note: This link will expire after 72 hours according to the retention policy.`;
+
         const { data, error } = await resend.emails.send({
             from: 'Menu Portal <onboarding@resend.dev>',
             to: [to],
-            subject: `[Menu Portal] ZIP downloaded – ${brandName}`,
-            text: `Brand name: ${brandName}\nItems: ${itemCount}\nDownloaded at: ${timestamp} (Qatar Time)`,
+            subject: `[Menu Portal] ZIP Downloaded – ${brandName}`,
+            text: textBody,
         });
 
         if (error) {

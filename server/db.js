@@ -26,4 +26,17 @@ db.exec(`
   )
 `);
 
+// Migration to add docs_token safely
+try {
+    const info = db.pragma('table_info(submissions)');
+    const hasDocsToken = info.some(column => column.name === 'docs_token');
+    
+    if (!hasDocsToken) {
+        db.exec("ALTER TABLE submissions ADD COLUMN docs_token TEXT");
+        console.log("Migration: Added docs_token column to submissions table");
+    }
+} catch (err) {
+    console.error("Migration warning checks:", err);
+}
+
 module.exports = db;

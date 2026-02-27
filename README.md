@@ -22,6 +22,7 @@ ADMIN_TOKEN=your-admin-password
 RETENTION_HOURS=72
 RESEND_API_KEY=your-resend-api-key
 NOTIFY_EMAIL_TO=your-email@example.com
+APP_BASE_URL=http://localhost:5173
 ```
 
 ### 3. Run the app
@@ -45,16 +46,18 @@ Open **http://localhost:5173** in your browser.
 ## How It Works
 
 ### User Flow
-1. **Landing** — Enter brand name and phone number
-2. **Assets** — Upload logo and product images (warns if below 1000×1000)
-3. **Menu** — Add menu items with names (EN/AR), descriptions, price, category, barcode, and link to uploaded images (auto-saves as you type)
-4. **Review** — Verify submission summary
-5. **Submit** — Generates a ZIP package and Excel file for download (email notification sent on first ZIP download)
+1. **Gateway (`/start`)** — Choose to upload documents or build menu
+2. **Docs Portal** — Provide basic info (Home/Commercial type) and upload required certificates (CR, IBAN, etc.)
+3. **Docs Submission** — Generates a secure `docs-package.zip`, emails admin, and seamlessly hands off to the Menu flow.
+4. **Menu Portal** — Upload brand assets (warns if below 1000×1000).
+5. **Menu Items** — Add menu items with names (EN/AR), descriptions, price, category, barcode, and images (auto-saves).
+6. **Review & Submit** — Generates a Menu ZIP package and Excel file for download. Admin is optionally emailed with a secure download securely link.
 
 ### Downloads
-- **ZIP Package** contains: `logo/`, `product_images/`, `menu/menu.xlsx`, `meta.json`
+- **Docs ZIP Package** contains: `info.txt`, `CR.pdf`, `IBAN_Stamped.pdf`, `Home_License.pdf`, etc.
+- **Menu ZIP Package** contains: `logo/`, `product_images/`, `menu/menu.xlsx`, `meta.json`
 - **Excel file** contains all menu items in a formatted spreadsheet
-- Both are accessible via unique download links with access token validation
+- All downloads are accessible via unique, secure download links with token validation (`/dl/docs/:token` or `/download/:subId/:file?accessToken=...`).
 
 ### Auto-Deletion
 - Files are stored temporarily on disk in `server/data/<submissionId>/`

@@ -34,11 +34,12 @@ async function checkImageDimensions(filePath) {
 // ─── POST /api/submission/create ─────────────────────────────
 router.post('/create', (req, res) => {
     try {
-        const { brandName, businessType } = req.body;
+        const { brandName, categories } = req.body;
         if (!brandName || !brandName.trim()) {
             return res.status(400).json({ error: 'Brand name is required' });
         }
 
+        const businessType = (categories && categories.length > 0) ? categories[0] : 'cat_other';
         const submissionId = uuidv4();
         const accessToken = uuidv4();
         const createdAt = new Date().toISOString();
@@ -53,13 +54,18 @@ router.post('/create', (req, res) => {
         // Save meta.json
         fs.writeFileSync(
             path.join(subDir, 'meta.json'),
-            JSON.stringify({ brandName: brandName.trim(), businessType: businessType || 'other', createdAt }, null, 2)
+            JSON.stringify({
+                brandName: brandName.trim(),
+                businessType,
+                categories: categories || [businessType],
+                createdAt
+            }, null, 2)
         );
 
-        // Insert DB record
+        // Insert DB record (using businessType as the phone/classification field)
         db.prepare(
             'INSERT INTO submissions (id, brand_name, phone, access_token, created_at) VALUES (?, ?, ?, ?, ?)'
-        ).run(submissionId, brandName.trim(), businessType || 'other', accessToken, createdAt);
+        ).run(submissionId, brandName.trim(), businessType, accessToken, createdAt);
 
         res.json({ submissionId, accessToken });
     } catch (err) {
@@ -380,8 +386,10 @@ router.post('/submit', authMiddleware, async (req, res) => {
             menuSheet.addRow(rowData);
         });
 
-        // Use brand name in Excel filename
+        // Canonical + branded Excel filenames
+        const excelCanonicalBasename = 'menu.xlsx';
         const excelBasename = `menu_${safeBrandName}.xlsx`;
+        const excelCanonicalPath = path.join(subDir, 'menu', excelCanonicalBasename);
         const excelPath = path.join(subDir, 'menu', excelBasename);
 
         // Ensure menu directory exists (it should, but just in case)
@@ -407,7 +415,11 @@ router.post('/submit', authMiddleware, async (req, res) => {
                 const dayData = schedule[dayKey];
                 let val = 'Closed';
                 if (dayData && !dayData.closed) {
-                    val = `${dayData.from.h}:${dayData.from.m} ${dayData.from.p} - ${dayData.to.h}:${dayData.to.m} ${dayData.to.p}`;
+                    if (dayData.is24Hours) {
+                        val = '24 Hours';
+                    } else {
+                        val = `${dayData.from.h}:${dayData.from.m} ${dayData.from.p} - ${dayData.to.h}:${dayData.to.m} ${dayData.to.p}`;
+                    }
                 }
                 locationSheet.addRow({ field: `Working Hours (${day})`, value: val });
             });
@@ -421,7 +433,11 @@ router.post('/submit', authMiddleware, async (req, res) => {
             locationSheet.addRow({ field: 'Notice', value: 'No location details provided.' });
         }
 
-        await workbook.xlsx.writeFile(excelPath);
+        // Always write canonical name used by download endpoint
+        await workbook.xlsx.writeFile(excelCanonicalPath);
+
+        // Also keep branded name for packaged deliverables
+        fs.copyFileSync(excelCanonicalPath, excelPath);
 
         // ── Generate ZIP ──
         const zipFilename = `${safeBrandName}-${req.submissionId.slice(0, 8)}.zip`;

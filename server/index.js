@@ -8,10 +8,18 @@ const cron = require('node-cron');
 const submissionRoutes = require('./routes/submission');
 const downloadRoutes = require('./routes/download');
 const adminRoutes = require('./routes/admin');
+const docsRoutes = require('./routes/docs');
 const { runCleanup } = require('./cleanup');
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+
+if (!process.env.ADMIN_TOKEN) {
+    console.warn('⚠️  ADMIN_TOKEN is not configured. Admin routes are disabled until it is set.');
+}
+
 
 // Middleware
 app.use(cors());
@@ -20,9 +28,32 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/submission', submissionRoutes);
+app.use('/api/docs', docsRoutes);
 app.use('/download', downloadRoutes);
 app.use('/admin', adminRoutes);
 app.use('/api/admin', adminRoutes);
+
+// Secure Docs Download Endpoint
+app.get('/dl/docs/:token', (req, res) => {
+    try {
+        const { token } = req.params;
+        const submission = db.prepare('SELECT id FROM submissions WHERE docs_token = ?').get(token);
+
+        if (!submission) {
+            return res.status(404).send('Invalid or expired download link.');
+        }
+
+        const pkgPath = path.join(__dirname, 'data', submission.id, 'docs', 'docs-package.zip');
+        if (!fs.existsSync(pkgPath)) {
+            return res.status(404).send('Document package not found. It may have been deleted by the 72-hour retention policy.');
+        }
+
+        res.download(pkgPath, 'docs-package.zip');
+    } catch (err) {
+        console.error('Docs download error:', err);
+        res.status(500).send('Internal server error while downloading documents.');
+    }
+});
 
 // Health check
 app.get('/api/health', (req, res) => {

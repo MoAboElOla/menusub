@@ -4,12 +4,31 @@ import { apiGet, apiPost, apiDelete, getAuth } from '../api';
 import { useLanguage } from '../i18n';
 import StepIndicator from '../components/StepIndicator';
 import { TEMPLATE_CATEGORIES, TEMPLATE_ADDONS, TEMPLATE_EXAMPLES } from '../templateData';
+import { shouldAutosave } from '../utils/menuAutosave';
 
 const EMPTY_ITEM = {
     item_name_en: '', item_name_ar: '', description_en: '', description_ar: '',
     price: '', category: '', barcode: '', image: '', addons: [],
 };
 const EMPTY_ADDON = { name_en: '', name_ar: '', price: '' };
+
+const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText, cancelText, isRtl }) => {
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className={`bg-white dark:bg-[#181924] rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 ${isRtl ? 'text-right' : 'text-left'}`} dir={isRtl ? 'rtl' : 'ltr'}>
+                <div className="p-6">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{title}</h3>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed">{message}</p>
+                </div>
+                <div className="flex border-t border-gray-100 dark:border-gray-800">
+                    <button onClick={onCancel} className="flex-1 px-4 py-4 text-sm font-medium text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors border-r dark:border-gray-800">{cancelText}</button>
+                    <button onClick={onConfirm} className="flex-1 px-4 py-4 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">{confirmText}</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default function Menu() {
     const { t, isRtl } = useLanguage();
@@ -26,10 +45,13 @@ export default function Menu() {
     const [activeAddonIdx, setActiveAddonIdx] = useState(null);
     const [copiedAddons, setCopiedAddons] = useState(null);
     const [validationErrors, setValidationErrors] = useState({});
-    const [businessType, setBusinessType] = useState('restaurants_cafes');
+    const [businessType, setBusinessType] = useState('cat_restaurants');
     const [customCategories, setCustomCategories] = useState([]);
     const [addingCategoryIdx, setAddingCategoryIdx] = useState(null);
     const [newCategoryName, setNewCategoryName] = useState('');
+
+    // Confirmation Modal State
+    const [confirmModal, setConfirmModal] = useState({ isOpen: false, type: '', data: null });
 
     useEffect(() => {
         if (!submissionId || !accessToken) { navigate('/'); return; }
@@ -43,11 +65,11 @@ export default function Menu() {
     }, []);
 
     // Derived config
-    const templateCategories = TEMPLATE_CATEGORIES[businessType] || TEMPLATE_CATEGORIES.other;
-    const allCategories = [...templateCategories.filter(c => c !== 'Other'), ...customCategories, 'Other'];
-    const addonConfig = TEMPLATE_ADDONS[businessType] || TEMPLATE_ADDONS.other;
+    const templateCategories = TEMPLATE_CATEGORIES[businessType] || TEMPLATE_CATEGORIES.cat_other || [];
+    const allCategories = [...templateCategories.filter(c => c.en !== 'Other'), ...customCategories.map(c => typeof c === 'string' ? { en: c, ar: c } : c), { en: 'Other', ar: 'أخرى' }];
+    const addonConfig = TEMPLATE_ADDONS[businessType] || TEMPLATE_ADDONS.cat_other || { enabled: false };
     const addonsEnabled = addonConfig.enabled;
-    const example = TEMPLATE_EXAMPLES[businessType] || TEMPLATE_EXAMPLES.other;
+    const example = TEMPLATE_EXAMPLES[businessType] || TEMPLATE_EXAMPLES.cat_other || {};
 
     // ── Item management ──
     const updateItem = (idx, field, value) => {
@@ -61,22 +83,37 @@ export default function Menu() {
     const addItem = () => setItems((p) => [...p, { ...EMPTY_ITEM, addons: [] }]);
 
     const removeItem = (idx) => {
-        if (!window.confirm(t('confirmDeleteItem') || 'Are you sure you want to remove this item?')) return;
-        setItems((p) => p.filter((_, i) => i !== idx));
-        if (activeAddonIdx === idx) setActiveAddonIdx(null);
-        else if (activeAddonIdx > idx) setActiveAddonIdx(activeAddonIdx - 1);
-        setSaved(false);
+        setConfirmModal({
+            isOpen: true,
+            type: 'deleteItem',
+            data: idx
+        });
+    };
+
+    const handleConfirmDelete = () => {
+        const { type, data } = confirmModal;
+        if (type === 'deleteItem') {
+            const idx = data;
+            setItems((p) => p.filter((_, i) => i !== idx));
+            if (activeAddonIdx === idx) setActiveAddonIdx(null);
+            else if (activeAddonIdx > idx) setActiveAddonIdx(activeAddonIdx - 1);
+            setSaved(false);
+        } else if (type === 'deleteImage') {
+            const filename = data;
+            executeDeleteImage(filename);
+        }
+        setConfirmModal({ isOpen: false, type: '', data: null });
     };
 
     // ── Auto-save ──
     useEffect(() => {
         const timer = setTimeout(() => {
-            if (!saved && items.length > 0 && items[0].item_name_en !== '' || items[0].item_name_ar !== '') {
+            if (shouldAutosave(items, saved)) {
                 saveMenu();
             }
         }, 1000);
         return () => clearTimeout(timer);
-    }, [items]);
+    }, [items, saved]);
 
     const duplicateItem = (idx) => {
         setItems((p) => {
@@ -99,12 +136,18 @@ export default function Menu() {
     };
 
     // ── Delete image from gallery ──
-    const deleteGalleryImage = async (filename) => {
-        if (!window.confirm(t('confirmDeleteImage') || 'Are you sure you want to delete this image? This will also unassign it from any items.')) return;
+    const deleteGalleryImage = (filename) => {
+        setConfirmModal({
+            isOpen: true,
+            type: 'deleteImage',
+            data: filename
+        });
+    };
+
+    const executeDeleteImage = async (filename) => {
         try {
             await apiDelete('/api/submission/delete-image', { filename });
             setAvailableImages(prev => prev.filter(img => img !== filename));
-            // Unassign from any items using this image
             setItems(prev => prev.map(item => item.image === filename ? { ...item, image: '' } : item));
         } catch (err) {
             setError(err.message);
@@ -139,8 +182,8 @@ export default function Menu() {
     const handleAddCustomCategory = (idx) => {
         const trimmed = newCategoryName.trim();
         if (!trimmed) return;
-        if (!customCategories.includes(trimmed)) {
-            setCustomCategories(prev => [...prev, trimmed]);
+        if (!customCategories.find(c => c.en === trimmed)) {
+            setCustomCategories(prev => [...prev, { en: trimmed, ar: trimmed }]);
         }
         updateItem(idx, 'category', trimmed);
         setNewCategoryName('');
@@ -163,10 +206,12 @@ export default function Menu() {
 
     // ── Save & Navigate ──
     const saveMenu = async () => {
+        if (saving) return;
         setSaving(true); setError('');
         try {
             await apiPost('/api/submission/save-menu', { items });
             setSaved(true);
+            setTimeout(() => setSaved(false), 3000);
         } catch (err) { setError(err.message); }
         finally { setSaving(false); }
     };
@@ -201,12 +246,6 @@ export default function Menu() {
 
             {error && (
                 <div className="flex items-center gap-2 px-4 py-3 mb-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl text-red-600 dark:text-red-400 text-sm">{error}</div>
-            )}
-            {saved && (
-                <div className="flex items-center gap-2 px-4 py-3 mb-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl text-emerald-600 dark:text-emerald-400 text-sm">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                    {t('menuSaved')}
-                </div>
             )}
             {Object.keys(validationErrors).length > 0 && (
                 <div className="flex items-center gap-2 px-4 py-3 mb-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl text-red-600 dark:text-red-400 text-sm">
@@ -427,8 +466,10 @@ export default function Menu() {
                                                         style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b7280' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
                                                     >
                                                         <option value="">{t('categoryPlaceholder')}</option>
-                                                        {allCategories.map((cat) => (
-                                                            <option key={cat} value={cat}>{cat}</option>
+                                                        {allCategories.map((cat, ci) => (
+                                                            <option key={ci} value={cat.en}>
+                                                                {cat.en} {cat.en !== cat.ar ? ` - ${cat.ar}` : ''}
+                                                            </option>
                                                         ))}
                                                         <option value="__custom__">{t('addCustomCategory')}</option>
                                                     </select>
@@ -486,17 +527,17 @@ export default function Menu() {
                                                     )}
 
                                                     {item.addons.map((addon, ai) => (
-                                                        <div key={ai} className="grid grid-cols-[1fr_1fr_80px_32px] gap-2 mb-2">
+                                                        <div key={ai} className="grid grid-cols-[1fr_1fr_80px_32px] gap-2 mb-2 animate-in slide-in-from-top-1 duration-200">
                                                             <input type="text" value={addon.name_en} onChange={(e) => updateAddon(idx, ai, 'name_en', e.target.value)}
-                                                                placeholder={t('addonNameEnPlaceholder')}
+                                                                placeholder={addonConfig.exampleEn}
                                                                 className={addonInputCls}
                                                             />
                                                             <input type="text" value={addon.name_ar} onChange={(e) => updateAddon(idx, ai, 'name_ar', e.target.value)}
-                                                                placeholder={t('addonNameArPlaceholder')} dir="rtl"
+                                                                placeholder={addonConfig.exampleAr} dir="rtl"
                                                                 className={addonInputCls}
                                                             />
                                                             <input type="text" value={addon.price} onChange={(e) => updateAddon(idx, ai, 'price', e.target.value)}
-                                                                placeholder={t('addonPricePlaceholder')}
+                                                                placeholder={addonConfig.examplePrice}
                                                                 className={addonInputCls}
                                                             />
                                                             <button onClick={() => removeAddon(idx, ai)} className="text-gray-400 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors flex items-center justify-center">
@@ -548,7 +589,7 @@ export default function Menu() {
                 <div className="flex gap-3">
                     <button onClick={saveMenu} disabled={saving}
                         className="px-6 py-3 bg-white dark:bg-[#181924] text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-700/50 rounded-xl hover:border-brand-500/50 transition-all text-sm font-medium disabled:opacity-50">
-                        {saving ? t('saving') : t('save')}
+                        {t('save')}
                     </button>
                     <button onClick={handleNext} disabled={saving}
                         className="px-8 py-3 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-500 hover:to-brand-600 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 shadow-lg shadow-brand-600/20 active:scale-[0.98]">
@@ -556,6 +597,18 @@ export default function Menu() {
                     </button>
                 </div>
             </div>
+
+            {/* Confirmation Modal */}
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                title={t('confirmDeleteTitle')}
+                message={confirmModal.type === 'deleteItem' ? t('confirmDeleteItemMsg') : t('confirmDeleteImageMsg')}
+                onConfirm={handleConfirmDelete}
+                onCancel={() => setConfirmModal({ isOpen: false, type: '', data: null })}
+                confirmText={t('deleteAction')}
+                cancelText={t('cancel')}
+                isRtl={isRtl}
+            />
         </div>
     );
 }

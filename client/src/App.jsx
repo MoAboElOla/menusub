@@ -9,6 +9,10 @@ import Location from './pages/Location';
 import Review from './pages/Review';
 import Success from './pages/Success';
 import Admin from './pages/Admin';
+import Gateway from './pages/Gateway';
+import DocsInfo from './pages/DocsInfo';
+import DocsUpload from './pages/DocsUpload';
+import DocsSuccess from './pages/DocsSuccess';
 
 function TopBar() {
     const { t, toggleLang, isRtl } = useLanguage();
@@ -33,12 +37,18 @@ function AppRoutes() {
         <div className="min-h-screen bg-[#f8f9fb] dark:bg-[#0f1117] transition-colors duration-300">
             <TopBar />
             <Routes>
-                <Route path="/" element={<Landing />} />
+                <Route path="/" element={<Gateway />} />
+                <Route path="/docs/info" element={<DocsInfo />} />
+                <Route path="/docs/upload" element={<DocsUpload />} />
+                <Route path="/docs/success" element={<DocsSuccess />} />
+
+                <Route path="/menu" element={<Landing />} />
                 <Route path="/submit/assets" element={<Assets />} />
                 <Route path="/submit/menu" element={<Menu />} />
                 <Route path="/submit/location" element={<Location />} />
                 <Route path="/submit/review" element={<Review />} />
                 <Route path="/submit/success" element={<Success />} />
+
                 <Route path="/admin" element={<Admin />} />
             </Routes>
         </div>
