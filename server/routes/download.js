@@ -55,7 +55,7 @@ router.get('/:submissionId/package.zip', downloadAuth, async (req, res) => {
 
                 // Non-blocking email trigger
                 const itemCount = meta.menuItems ? meta.menuItems.length : 0;
-                sendZipDownloadEmail(meta.brandName, itemCount).catch(err => {
+                sendZipDownloadEmail(meta.brandName, itemCount, subId, req.query.accessToken).catch(err => {
                     console.error('[Download] ZIP download email failed (async):', err);
                 });
                 console.log(`[Download] First time download detected for ${meta.brandName}. Triggering email.`);
