@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiPost, setAuth, clearAuth } from '../api';
 import { useLanguage } from '../i18n';
 import { BUSINESS_TYPES } from '../templateData';
@@ -11,6 +11,14 @@ export default function Landing() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    useEffect(() => {
+        if (searchParams.get('error') === 'missingAuth') {
+            setError(t('missingSessionAuth'));
+            setSearchParams({}, { replace: true });
+        }
+    }, [searchParams, setSearchParams, t]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();

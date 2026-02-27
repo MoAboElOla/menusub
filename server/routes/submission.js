@@ -380,8 +380,10 @@ router.post('/submit', authMiddleware, async (req, res) => {
             menuSheet.addRow(rowData);
         });
 
-        // Use brand name in Excel filename
+        // Canonical + branded Excel filenames
+        const excelCanonicalBasename = 'menu.xlsx';
         const excelBasename = `menu_${safeBrandName}.xlsx`;
+        const excelCanonicalPath = path.join(subDir, 'menu', excelCanonicalBasename);
         const excelPath = path.join(subDir, 'menu', excelBasename);
 
         // Ensure menu directory exists (it should, but just in case)
@@ -421,7 +423,11 @@ router.post('/submit', authMiddleware, async (req, res) => {
             locationSheet.addRow({ field: 'Notice', value: 'No location details provided.' });
         }
 
-        await workbook.xlsx.writeFile(excelPath);
+        // Always write canonical name used by download endpoint
+        await workbook.xlsx.writeFile(excelCanonicalPath);
+
+        // Also keep branded name for packaged deliverables
+        fs.copyFileSync(excelCanonicalPath, excelPath);
 
         // ── Generate ZIP ──
         const zipFilename = `${safeBrandName}-${req.submissionId.slice(0, 8)}.zip`;

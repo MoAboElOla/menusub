@@ -13,6 +13,12 @@ const { runCleanup } = require('./cleanup');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+
+if (!process.env.ADMIN_TOKEN) {
+    console.warn('⚠️  ADMIN_TOKEN is not configured. Admin routes are disabled until it is set.');
+}
+
+
 // Middleware
 app.use(cors());
 app.use(express.json());

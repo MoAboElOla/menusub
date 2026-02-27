@@ -4,6 +4,7 @@ import { apiGet, apiPost, apiDelete, getAuth } from '../api';
 import { useLanguage } from '../i18n';
 import StepIndicator from '../components/StepIndicator';
 import { TEMPLATE_CATEGORIES, TEMPLATE_ADDONS, TEMPLATE_EXAMPLES } from '../templateData';
+import { shouldAutosave } from '../utils/menuAutosave';
 
 const EMPTY_ITEM = {
     item_name_en: '', item_name_ar: '', description_en: '', description_ar: '',
@@ -71,12 +72,12 @@ export default function Menu() {
     // ── Auto-save ──
     useEffect(() => {
         const timer = setTimeout(() => {
-            if (!saved && items.length > 0 && items[0].item_name_en !== '' || items[0].item_name_ar !== '') {
+            if (shouldAutosave(items, saved)) {
                 saveMenu();
             }
         }, 1000);
         return () => clearTimeout(timer);
-    }, [items]);
+    }, [items, saved]);
 
     const duplicateItem = (idx) => {
         setItems((p) => {

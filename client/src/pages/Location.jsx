@@ -9,6 +9,11 @@ const HOURS = Array.from({ length: 12 }, (_, i) => (i + 1).toString());
 const MINUTES = ['00', '15', '30', '45'];
 const PERIODS = ['AM', 'PM'];
 
+function hasSubmissionAuth() {
+    const { submissionId, accessToken } = getAuth();
+    return Boolean(submissionId && accessToken);
+}
+
 export default function Location() {
     const { t, isRtl } = useLanguage();
     const navigate = useNavigate();
@@ -31,9 +36,8 @@ export default function Location() {
     const [operationalPhone, setOperationalPhone] = useState('');
 
     useEffect(() => {
-        const auth = getAuth();
-        if (!auth) {
-            navigate('/');
+        if (!hasSubmissionAuth()) {
+            navigate('/?error=missingAuth');
             return;
         }
 
@@ -70,6 +74,11 @@ export default function Location() {
     };
 
     const handleSave = async () => {
+        if (!hasSubmissionAuth()) {
+            navigate('/?error=missingAuth');
+            return;
+        }
+
         setSaving(true);
         try {
             await apiPost('/api/submission/save-location', {

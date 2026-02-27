@@ -40,6 +40,7 @@ const translations = {
         getStarted: 'Get Started →',
         creating: 'Creating...',
         brandNameRequired: 'Brand name is required',
+        missingSessionAuth: 'Your session is missing or expired. Please start again.',
 
         // ── Steps ──
         stepAssets: 'Assets',
@@ -228,6 +229,7 @@ const translations = {
         getStarted: 'ابدأ الآن ←',
         creating: 'جارٍ الإنشاء...',
         brandNameRequired: 'اسم العلامة التجارية مطلوب',
+        missingSessionAuth: 'انتهت الجلسة أو بياناتها غير مكتملة. يرجى البدء من جديد.',
 
         // ── Steps ──
         stepAssets: 'الأصول',
