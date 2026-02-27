@@ -6,7 +6,7 @@ import { useLanguage } from '../i18n';
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
 // Reusable Document Uploader Block
-function DocUploader({ title, docType, isUploaded, onUpload, onDelete, warningText, extraNote }) {
+function DocUploader({ title, docType, uploadedFiles = [], onUpload, onDelete, warningText, extraNote }) {
     const { t } = useLanguage();
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -14,18 +14,32 @@ function DocUploader({ title, docType, isUploaded, onUpload, onDelete, warningTe
     const [isDragging, setIsDragging] = useState(false);
     const inputRef = useRef(null);
 
-    const handleFileChange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+    const [localPreviews, setLocalPreviews] = useState({}); // { filename: blobUrl }
 
-        if (file.size > MAX_FILE_SIZE) {
-            setError('File size must be less than 20MB');
+    const isLimitReached = uploadedFiles.length >= 3;
+
+    const handleFileChange = async (e) => {
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+
+        if (uploadedFiles.length + files.length > 3) {
+            setError(t('uploadLimitError') || 'Maximum 3 files allowed per document.');
+            if (inputRef.current) inputRef.current.value = '';
             return;
         }
 
         const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-        if (!allowedTypes.includes(file.type)) {
+        const invalidFile = files.find(f => !allowedTypes.includes(f.type));
+        if (invalidFile) {
             setError('Only PDF, JPG, or PNG files are allowed');
+            if (inputRef.current) inputRef.current.value = '';
+            return;
+        }
+
+        const largeFile = files.find(f => f.size > MAX_FILE_SIZE);
+        if (largeFile) {
+            setError('File size must be less than 20MB');
+            if (inputRef.current) inputRef.current.value = '';
             return;
         }
 
@@ -35,11 +49,21 @@ function DocUploader({ title, docType, isUploaded, onUpload, onDelete, warningTe
 
         try {
             const formData = new FormData();
-            formData.append('docType', docType); // Append metadata before the file!
-            formData.append('document', file);
+            formData.append('docType', docType);
+            files.forEach(f => formData.append('documents', f));
 
-            await apiUpload('/api/docs/upload', formData, setProgress);
-            onUpload(docType);
+            const res = await apiUpload('/api/docs/upload', formData, setProgress);
+
+            // Map NEW filenames to local blob URLs for instant preview
+            const newLocalPreviews = {};
+            res.filenames.forEach((fname, i) => {
+                if (files[i].type.startsWith('image/')) {
+                    newLocalPreviews[fname] = URL.createObjectURL(files[i]);
+                }
+            });
+            setLocalPreviews(prev => ({ ...prev, ...newLocalPreviews }));
+
+            onUpload(docType, res.filenames);
             setProgress(100);
         } catch (err) {
             setError(err.message || 'Upload failed');
@@ -51,7 +75,7 @@ function DocUploader({ title, docType, isUploaded, onUpload, onDelete, warningTe
 
     const handleDragOver = (e) => {
         e.preventDefault();
-        setIsDragging(true);
+        if (!isLimitReached) setIsDragging(true);
     };
 
     const handleDragLeave = (e) => {
@@ -62,26 +86,44 @@ function DocUploader({ title, docType, isUploaded, onUpload, onDelete, warningTe
     const handleDrop = (e) => {
         e.preventDefault();
         setIsDragging(false);
+        if (isLimitReached) return;
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            // Fake an event object to reuse handleFileChange
             handleFileChange({ target: { files: e.dataTransfer.files } });
             e.dataTransfer.clearData();
         }
     };
 
-    const handleDelete = async () => {
+    const handleDelete = async (filename) => {
         try {
-            await apiDelete('/api/docs/delete', { docType });
-            onDelete(docType);
+            await apiDelete('/api/docs/delete', { filename });
+            // Cleanup local preview if it exists
+            if (localPreviews[filename]) {
+                URL.revokeObjectURL(localPreviews[filename]);
+                const next = { ...localPreviews };
+                delete next[filename];
+                setLocalPreviews(next);
+            }
+            onDelete(docType, filename);
         } catch (err) {
             setError('Failed to delete file');
         }
     };
 
+    const getPreviewUrl = (filename) => {
+        // Prefer local blob URL if available
+        if (localPreviews[filename]) {
+            return localPreviews[filename];
+        }
+
+        // Fallback to server secure URL
+        const { submissionId, accessToken } = getAuth();
+        return `/api/docs/preview/${filename}?accessToken=${accessToken}&submissionId=${submissionId}`;
+    };
+
     return (
         <div
-            className={`p-4 rounded-xl border-2 transition-all ${isUploaded
-                ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-500/5'
+            className={`p-4 rounded-xl border-2 transition-all ${uploadedFiles.length > 0
+                ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-500/5'
                 : isDragging
                     ? 'border-brand-500 bg-brand-50/80 dark:bg-brand-500/10'
                     : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-[#181924]'
@@ -92,18 +134,14 @@ function DocUploader({ title, docType, isUploaded, onUpload, onDelete, warningTe
         >
             <div className="flex justify-between items-start mb-2">
                 <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                    {isUploaded && (
-                        <svg className="w-5 h-5 text-brand-500" fill="currentColor" viewBox="0 0 20 20">
+                    {uploadedFiles.length > 0 && (
+                        <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                         </svg>
                     )}
                     {title}
                 </h3>
-                {isUploaded ? (
-                    <button onClick={handleDelete} className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 bg-red-50 dark:bg-red-500/10 rounded-lg transition-colors">
-                        {t('remove')}
-                    </button>
-                ) : (
+                {uploadedFiles.length === 0 && (
                     <span className="text-xs text-red-500 font-medium bg-red-50 dark:bg-red-500/10 px-2 py-0.5 rounded-full">{t('required')}</span>
                 )}
             </div>
@@ -124,9 +162,35 @@ function DocUploader({ title, docType, isUploaded, onUpload, onDelete, warningTe
                 </div>
             )}
 
-            {!isUploaded ? (
-                <div className="mt-3">
-                    <input type="file" ref={inputRef} accept="application/pdf,image/jpeg,image/png,image/jpg" className="hidden" onChange={handleFileChange} />
+            {/* Display list of uploaded files */}
+            {uploadedFiles.length > 0 && (
+                <div className="mt-3 space-y-2 mb-3">
+                    {uploadedFiles.map((filename, idx) => {
+                        const isPdf = filename.toLowerCase().endsWith('.pdf');
+                        return (
+                            <div key={idx} className="flex items-center justify-between p-2 bg-white dark:bg-[#0f1117] rounded-lg border border-brand-200 dark:border-brand-800">
+                                <div className="flex items-center gap-3 overflow-hidden">
+                                    {isPdf ? (
+                                        <div className="w-10 h-10 rounded shrink-0 bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-500">
+                                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                        </div>
+                                    ) : (
+                                        <img src={getPreviewUrl(filename)} alt="preview" className="w-10 h-10 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-700" />
+                                    )}
+                                    <span className="text-sm text-gray-700 dark:text-gray-300 truncate text-left dir-ltr" dir="ltr" title={filename}>{filename}</span>
+                                </div>
+                                <button onClick={() => handleDelete(filename)} className="ml-2 text-gray-400 hover:text-red-500 transition-colors p-1" title={t('remove') || 'Remove'}>
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {!isLimitReached && (
+                <div className="mt-2">
+                    <input type="file" ref={inputRef} multiple accept="application/pdf,image/jpeg,image/png,image/jpg" className="hidden" onChange={handleFileChange} />
                     <button onClick={() => inputRef.current?.click()} disabled={uploading}
                         className="w-full py-2.5 border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-500 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-500/5 transition-all flex justify-center items-center gap-2">
                         {uploading ? (
@@ -136,22 +200,15 @@ function DocUploader({ title, docType, isUploaded, onUpload, onDelete, warningTe
                             </>
                         ) : (
                             <>
-                                <svg className="w-5 h-5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12" /></svg>
-                                {t('uploadFile') || 'Upload File'}
+                                <svg className="w-5 h-5 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" /></svg>
+                                {t('uploadFile') || 'Upload Document'}
                             </>
                         )}
                     </button>
-                    <p className="text-[11px] text-gray-400 mt-2 text-center">{t('uploadLimitHint')}</p>
-                    {error && <p className="text-xs text-red-500 mt-2 text-center">{error}</p>}
-                </div>
-            ) : (
-                <div className="mt-2 p-2 bg-white dark:bg-[#0f1117] rounded-lg border border-brand-200 dark:border-brand-800 flex items-center justify-between">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                        <svg className="w-4 h-4 text-green-500 min-w-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" /></svg>
-                        <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{docType} {t('docUploadSuccess')}</span>
-                    </div>
+                    <p className="text-[11px] text-gray-400 mt-2 text-center">{t('uploadLimitHint') || 'Upload up to 3 files. Supported formats: PDF, JPG, PNG. Max 20MB per file.'}</p>
                 </div>
             )}
+            {error && <p className="text-xs text-red-500 mt-2 text-center bg-red-50 dark:bg-red-500/10 py-1.5 rounded">{error}</p>}
         </div>
     );
 }
@@ -199,15 +256,27 @@ export default function DocsUpload() {
             { key: 'QID', title: t('docQid') }
         ];
 
-    const handleUploadComplete = (docType) => {
-        setInfo(prev => ({ ...prev, uploadedDocs: [...prev.uploadedDocs, docType] }));
+    const handleUploadComplete = (docType, newFilenames) => {
+        setInfo(prev => {
+            const current = prev.uploadedDocs[docType] || [];
+            return {
+                ...prev,
+                uploadedDocs: { ...prev.uploadedDocs, [docType]: [...current, ...newFilenames] }
+            };
+        });
     };
 
-    const handleDeleteComplete = (docType) => {
-        setInfo(prev => ({ ...prev, uploadedDocs: prev.uploadedDocs.filter(d => d !== docType) }));
+    const handleDeleteComplete = (docType, deletedFilename) => {
+        setInfo(prev => {
+            const current = prev.uploadedDocs[docType] || [];
+            return {
+                ...prev,
+                uploadedDocs: { ...prev.uploadedDocs, [docType]: current.filter(f => f !== deletedFilename) }
+            };
+        });
     };
 
-    const allUploaded = requiredDocs.every(d => info.uploadedDocs.includes(d.key));
+    const allUploaded = requiredDocs.every(d => info.uploadedDocs[d.key] && info.uploadedDocs[d.key].length > 0);
 
     const handleSubmit = async () => {
         if (!allUploaded) return;
@@ -261,7 +330,7 @@ export default function DocsUpload() {
                                 title={doc.title}
                                 warningText={doc.warning}
                                 extraNote={doc.extraNote}
-                                isUploaded={info.uploadedDocs.includes(doc.key)}
+                                uploadedFiles={info.uploadedDocs[doc.key] || []}
                                 onUpload={handleUploadComplete}
                                 onDelete={handleDeleteComplete}
                             />
@@ -271,7 +340,7 @@ export default function DocsUpload() {
 
                 <div className="mt-8 flex border-t border-gray-200 dark:border-gray-800 pt-6">
                     <button onClick={handleSubmit} disabled={!allUploaded || submitting}
-                        className="w-full lg:w-auto lg:min-w-[300px] py-3.5 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-500 hover:to-brand-600 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-600/20 active:scale-[0.98] flex items-center justify-center gap-2">
+                        className="w-full lg:w-auto lg:min-w-[300px] py-3.5 bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-600/20 active:scale-[0.98] flex items-center justify-center gap-2">
                         {submitting ? (
                             <>
                                 <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>

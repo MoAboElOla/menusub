@@ -203,7 +203,6 @@ const translations = {
         nextDocs: 'Next: Upload Documents →',
         docsUploadTitle: 'Upload Documents',
         docsUploadSubtitle: 'Please provide the required official documents.',
-        uploadLimitHint: 'PDF, JPG, PNG up to 20MB',
         docHomeLicense: 'Home License (رخصة منزلية)',
         docCR: 'Commercial Registration (CR)',
         docTradeLicense: 'Trade License / Commercial Permit',
@@ -228,6 +227,8 @@ const translations = {
         docsPhoneWarning: 'Snoonu will use this phone number to communicate with you. It will NOT be used for deliveries/operations.',
         docsCategoriesTitle: 'What products will you be listing on Snoonu?',
         docsCategoriesSubtitle: 'Select all that apply',
+        uploadLimitError: 'Maximum 3 files allowed per document.',
+        uploadLimitHint: 'Upload up to 3 files. Supported formats: PDF, JPG, PNG. Max 20MB per file.',
         docsCategoriesDesc: 'Please describe what products you sell',
 
         cat_restaurants: 'Restaurants & Cafes',
@@ -463,7 +464,6 @@ const translations = {
         nextDocs: 'التالي: رفع المستندات ←',
         docsUploadTitle: 'رفع المستندات',
         docsUploadSubtitle: 'يرجى تقديم المستندات الرسمية المطلوبة.',
-        uploadLimitHint: 'PDF, JPG, PNG بحد أقصى 20 ميجابايت',
         docHomeLicense: 'الرخصة المنزلية',
         docCR: 'السجل التجاري (CR)',
         docTradeLicense: 'الرخصة التجارية',
@@ -488,6 +488,8 @@ const translations = {
         docsPhoneWarning: 'سنستخدم رقم الهاتف هذا للتواصل معك. لن يتم استخدامه للتوصيل أو العمليات.',
         docsCategoriesTitle: 'ما هي المنتجات التي ستعرضها على سنونو؟',
         docsCategoriesSubtitle: 'اختر كل ما ينطبق',
+        uploadLimitError: 'يُسمح بـ ٣ ملفات كحد أقصى لكل مستند.',
+        uploadLimitHint: 'يمكنك رفع ٣ ملفات كحد أقصى. الصيغ المدعومة: PDF، JPG، PNG. الحد الأقصى ٢٠ ميجابايت للملف.',
         docsCategoriesDesc: 'يرجى وصف المنتجات التي تبيعها',
 
         cat_restaurants: 'مطاعم وكافيهات',

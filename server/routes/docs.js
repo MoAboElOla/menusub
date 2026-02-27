@@ -86,9 +86,22 @@ router.get('/info', authMiddleware, (req, res) => {
         const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
         const docsDir = path.join(subDir, 'docs');
 
-        let uploadedDocs = [];
+        const uploadedDocs = {};
         if (fs.existsSync(docsDir)) {
-            uploadedDocs = fs.readdirSync(docsDir).filter((f) => !f.startsWith('.')).map(f => f.split('.')[0]);
+            const files = fs.readdirSync(docsDir).filter((f) => !f.startsWith('.') && f !== 'docs-package.zip');
+            files.forEach(f => {
+                let baseType = "unknown";
+                for (const dt of ['CR', 'Trade_License', 'Computer_Card', 'IBAN_Stamped', 'QID', 'Home_License']) {
+                    if (f.startsWith(dt + '_')) {
+                        baseType = dt;
+                        break;
+                    }
+                }
+                if (baseType !== "unknown") {
+                    if (!uploadedDocs[baseType]) uploadedDocs[baseType] = [];
+                    uploadedDocs[baseType].push(f);
+                }
+            });
         }
 
         res.json({
@@ -112,12 +125,9 @@ const docsStorage = multer.diskStorage({
         cb(null, dir);
     },
     filename: (req, file, cb) => {
-        // We will store it with a unique name initially, but the client must pass the 'docType' in the body to identify it.
-        // Actually, we can use the fieldname directly if it's uploaded individually.
+        // Initially save with a temp name, we will rename it in the route handler after validating N
         const ext = path.extname(file.originalname).toLowerCase();
-        // The docType will be passed as a field, let's just use the `docType` as the filename + ext to overwrite previous uploads of the same type.
-        const docType = req.body.docType || 'unknown';
-        cb(null, `${docType}${ext}`);
+        cb(null, `temp_${Date.now()}_${Math.random().toString(36).substring(7)}${ext}`);
     },
 });
 
@@ -134,37 +144,108 @@ const uploadDocs = multer({
     },
 });
 
-router.post('/upload', authMiddleware, uploadDocs.single('document'), (req, res) => {
+router.post('/upload', authMiddleware, uploadDocs.array('documents', 3), (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ error: 'No files uploaded' });
         }
+        const docType = req.body.docType;
+        if (!docType) {
+            req.files.forEach(f => fs.unlinkSync(f.path));
+            return res.status(400).json({ error: 'docType is required' });
+        }
+
+        const subDir = getSubmissionDir(req.submissionId);
+        const metaPath = path.join(subDir, 'meta.json');
+        if (!fs.existsSync(metaPath)) {
+            req.files.forEach(f => fs.unlinkSync(f.path));
+            return res.status(404).json({ error: 'Submission meta not found' });
+        }
+
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+        const safeBrandName = (meta.brandName || 'brand').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, '_').trim();
+
+        const docsDir = path.join(subDir, 'docs');
+        const existingDocs = fs.readdirSync(docsDir).filter((f) => !f.startsWith('.') && f.startsWith(`${docType}_`));
+
+        if (existingDocs.length + req.files.length > 3) {
+            // Rollback temp files
+            req.files.forEach(f => fs.unlinkSync(f.path));
+            return res.status(400).json({ error: 'Maximum 3 files allowed per document type.' });
+        }
+
+        // Determine next starting N
+        let maxN = 0;
+        existingDocs.forEach(f => {
+            const parts = f.split('_');
+            if (parts.length > 0) {
+                // expecting DocType_BrandName_N.ext
+                const lastPart = parts[parts.length - 1];
+                const nStr = lastPart.split('.')[0];
+                const n = parseInt(nStr, 10);
+                if (!isNaN(n) && n > maxN) maxN = n;
+            }
+        });
+
+        const uploadedResult = [];
+        let currentN = maxN + 1;
+
+        req.files.forEach((file) => {
+            const ext = path.extname(file.originalname).toLowerCase();
+            const newName = `${docType}_${safeBrandName}_${currentN}${ext}`;
+            const newPath = path.join(docsDir, newName);
+            fs.renameSync(file.path, newPath);
+            uploadedResult.push(newName);
+            currentN++;
+        });
+
         res.json({
             success: true,
-            docType: req.body.docType,
-            filename: req.file.filename,
-            originalName: req.file.originalname,
+            docType: docType,
+            filenames: uploadedResult,
         });
     } catch (err) {
         console.error('Upload document error:', err);
-        res.status(500).json({ error: 'Failed to upload document' });
+        // cleanup temp files if failure
+        if (req.files) {
+            req.files.forEach(f => {
+                if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
+            });
+        }
+        res.status(500).json({ error: 'Failed to upload documents' });
+    }
+});
+
+// ─── GET /api/docs/preview/:filename ────────────────
+router.get('/preview/:filename', authMiddleware, (req, res) => {
+    try {
+        const filename = req.params.filename;
+        const safeFilename = path.basename(filename);
+        const filePath = path.join(getSubmissionDir(req.submissionId), 'docs', safeFilename);
+
+        if (fs.existsSync(filePath)) {
+            res.sendFile(filePath);
+        } else {
+            res.status(404).end();
+        }
+    } catch (err) {
+        res.status(500).end();
     }
 });
 
 // ─── DELETE /api/docs/delete ─────────────────────
 router.delete('/delete', authMiddleware, (req, res) => {
     try {
-        const { docType } = req.body;
-        if (!docType) return res.status(400).json({ error: 'docType is required' });
+        const { filename } = req.body;
+        if (!filename) return res.status(400).json({ error: 'filename is required' });
 
+        const safeFilename = path.basename(filename);
         const dir = path.join(getSubmissionDir(req.submissionId), 'docs');
-        if (fs.existsSync(dir)) {
-            const files = fs.readdirSync(dir);
-            const fileToDelete = files.find(f => f.startsWith(`${docType}.`));
-            if (fileToDelete) {
-                fs.unlinkSync(path.join(dir, fileToDelete));
-                return res.json({ deleted: true, docType });
-            }
+        const filePath = path.join(dir, safeFilename);
+
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            return res.json({ deleted: true, filename: safeFilename });
         }
         res.status(404).json({ error: 'File not found' });
     } catch (err) {
@@ -188,17 +269,29 @@ router.post('/submit', authMiddleware, async (req, res) => {
             uploadedDocs = fs.readdirSync(docsDir).filter((f) => !f.startsWith('.') && f !== 'docs-package.zip');
         }
 
-        // Validate required files based on business type
-        const uploadedTypes = uploadedDocs.map(f => f.split('.')[0]);
-        let requiredTypes = [];
+        // Group uploaded files by base type safely recognizing docTypes with underscores
+        const typeCount = {};
+        uploadedDocs.forEach(f => {
+            let baseType = "unknown";
+            for (const dt of ['CR', 'Trade_License', 'Computer_Card', 'IBAN_Stamped', 'QID', 'Home_License']) {
+                if (f.startsWith(dt + '_')) {
+                    baseType = dt;
+                    break;
+                }
+            }
+            if (baseType !== "unknown") {
+                typeCount[baseType] = (typeCount[baseType] || 0) + 1;
+            }
+        });
 
+        let requiredTypes = [];
         if (meta.businessType === 'home') {
             requiredTypes = ['Home_License', 'IBAN_Stamped', 'QID'];
         } else if (meta.businessType === 'commercial') {
             requiredTypes = ['CR', 'Trade_License', 'Computer_Card', 'IBAN_Stamped', 'QID'];
         }
 
-        const missing = requiredTypes.filter(rt => !uploadedTypes.includes(rt));
+        const missing = requiredTypes.filter(rt => !typeCount[rt] || typeCount[rt] < 1);
 
         if (missing.length > 0) {
             return res.status(400).json({ error: `Missing required documents: ${missing.join(', ')}` });
@@ -207,21 +300,8 @@ router.post('/submit', authMiddleware, async (req, res) => {
         const categories = meta.categories || [];
         const categoriesDescription = meta.categoriesDescription || '';
 
-        // ── Rename Files Server-Side to include BrandName ──
-        let renamedDocs = [];
-        uploadedDocs.forEach(f => {
-            const ext = path.extname(f);
-            const docType = f.split('.')[0];
-            const newName = `${docType}_${safeBrandName}${ext}`;
-            const oldPath = path.join(docsDir, f);
-            const newPath = path.join(docsDir, newName);
-
-            // Only rename if it doesn't already have the safeBrandName suffix (prevent double renaming bugs)
-            if (f !== newName) {
-                fs.renameSync(oldPath, newPath);
-            }
-            renamedDocs.push(newName);
-        });
+        // Files are strictly renamed upon upload now, so no mass renaming step is necessary.
+        const finalDocs = uploadedDocs;
 
         // ── Generate ZIP ──
         const zipFilename = `docs-package.zip`;
@@ -235,7 +315,7 @@ router.post('/submit', authMiddleware, async (req, res) => {
             archive.on('error', reject);
             archive.pipe(output);
 
-            renamedDocs.forEach((f) => {
+            finalDocs.forEach((f) => {
                 // Ensure proper sanitized naming in ZIP
                 archive.file(path.join(docsDir, f), { name: f });
             });
@@ -261,7 +341,7 @@ ${categoriesDescription ? `\nCategory Description:\n${categoriesDescription}` : 
             req.submissionId
         );
 
-        // Call email notification (fire and forget basically)
+        // Call email notification
         sendDocsEmail({
             brandName: meta.brandName,
             businessType: meta.businessType,
@@ -269,7 +349,7 @@ ${categoriesDescription ? `\nCategory Description:\n${categoriesDescription}` : 
             contactPhone: meta.contactPhone,
             categories: meta.categories,
             categoriesDescription: meta.categoriesDescription,
-            docsList: renamedDocs,
+            docsList: finalDocs,
             docsToken: docsToken
         }).catch(emailErr => {
             console.error('Non-blocking error: Failed to send docs email', emailErr);
