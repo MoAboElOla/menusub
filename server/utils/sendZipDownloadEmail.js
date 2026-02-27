@@ -24,7 +24,8 @@ async function sendZipDownloadEmail(brandName, itemCount, submissionId, accessTo
         return;
     }
 
-    const appBaseUrl = process.env.APP_BASE_URL || 'http://localhost:3001';
+    const port = process.env.PORT || 3001;
+    const appBaseUrl = process.env.APP_BASE_URL || `http://localhost:${port}`;
     const downloadLink = `${appBaseUrl}/download/${submissionId}/package.zip?accessToken=${accessToken}`;
 
     console.log(`[Email] Sending to: ${to}`);

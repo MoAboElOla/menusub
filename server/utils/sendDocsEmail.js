@@ -28,7 +28,8 @@ async function sendDocsEmail({ brandName, businessType, contactEmail, contactPho
         return;
     }
 
-    const appBaseUrl = process.env.APP_BASE_URL || 'http://localhost:3001';
+    const port = process.env.PORT || 3001;
+    const appBaseUrl = process.env.APP_BASE_URL || `http://localhost:${port}`;
     const downloadLink = `${appBaseUrl}/dl/docs/${docsToken}`;
 
     console.log(`[Email] Sending Docs email to: ${to}`);
